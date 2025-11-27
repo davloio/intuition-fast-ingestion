@@ -61,76 +61,89 @@ impl IngestionService {
             return self.run_live_mode(last_processed).await;
         }
 
-        if gap >= self.batch_size as u64 {
-            info!("Gap is {}, running reindex mode", gap);
-            return self.run_reindex_mode(last_processed, current_chain_height).await;
-        }
-
-        info!("Gap is {}, catching up remaining blocks", gap);
-        self.catch_up_remaining_blocks(last_processed, current_chain_height).await?;
-        self.run_live_mode(current_chain_height).await
+        info!("Gap is {}, running smart sync", gap);
+        self.run_smart_sync(last_processed, current_chain_height).await
     }
 
-    async fn run_reindex_mode(&self, start_block: u64, target_block: u64) -> Result<()> {
+    async fn run_smart_sync(&self, start_block: u64, initial_target: u64) -> Result<()> {
+        let mut current_block = start_block + 1;
+        let mut small_batch_count = 0;
+        const SMALL_BATCH_THRESHOLD: usize = 10;
+
         self.db
             .update_ingestion_state(start_block as i64, "reindex")
             .await?;
 
-        let mut current_block = start_block + 1;
+        loop {
+            let current_chain_height = self.blockchain_client.get_current_block_number().await?;
+            let remaining = current_chain_height.saturating_sub(current_block - 1);
 
-        while current_block + self.batch_size as u64 <= target_block {
-            info!(
-                "Fetching batch: blocks {} to {}",
-                current_block,
-                current_block + self.batch_size as u64 - 1
-            );
+            if remaining == 0 {
+                info!("Caught up to chain head, switching to live mode");
+                return self.run_live_mode(current_block - 1).await;
+            }
 
-            let block_data_batch = self
-                .blockchain_client
-                .fetch_block_batch(current_block, self.batch_size)
-                .await?;
+            let batch_size = std::cmp::min(remaining as usize, self.batch_size);
 
-            self.process_and_store_blocks(block_data_batch).await?;
+            if batch_size >= self.batch_size {
+                small_batch_count = 0;
+                
+                info!(
+                    "Fetching full batch: blocks {} to {}",
+                    current_block,
+                    current_block + batch_size as u64 - 1
+                );
 
-            current_block += self.batch_size as u64;
+                let block_data_batch = self
+                    .blockchain_client
+                    .fetch_block_batch(current_block, batch_size)
+                    .await?;
 
-            self.db
-                .update_ingestion_state(current_block as i64 - 1, "reindex")
-                .await?;
+                self.process_and_store_blocks(block_data_batch).await?;
+                current_block += batch_size as u64;
 
-            debug!("Updated state to block {}", current_block - 1);
+                self.db
+                    .update_ingestion_state(current_block as i64 - 1, "reindex")
+                    .await?;
+            } else {
+                info!(
+                    "Fetching small batch: {} blocks from {}",
+                    batch_size, current_block
+                );
+
+                let block_data_batch = self
+                    .blockchain_client
+                    .fetch_block_batch(current_block, batch_size)
+                    .await?;
+
+                self.process_and_store_blocks(block_data_batch).await?;
+                current_block += batch_size as u64;
+
+                self.db
+                    .update_ingestion_state(current_block as i64 - 1, "reindex")
+                    .await?;
+
+                if batch_size < SMALL_BATCH_THRESHOLD {
+                    small_batch_count += 1;
+                    info!(
+                        "Small batch #{} with {} blocks", 
+                        small_batch_count, batch_size
+                    );
+
+                    if small_batch_count >= 2 {
+                        info!(
+                            "Had {} small batches (< {} blocks), switching to live mode",
+                            small_batch_count, SMALL_BATCH_THRESHOLD
+                        );
+                        return self.run_live_mode(current_block - 1).await;
+                    }
+
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                } else {
+                    small_batch_count = 0;
+                }
+            }
         }
-
-        let remaining = target_block - current_block + 1;
-        if remaining > 0 {
-            info!("Processing final {} blocks", remaining);
-            return self.catch_up_remaining_blocks(current_block - 1, target_block).await;
-        }
-
-        Ok(())
-    }
-
-    async fn catch_up_remaining_blocks(&self, start_block: u64, target_block: u64) -> Result<()> {
-        let mut current_block = start_block + 1;
-
-        while current_block <= target_block {
-            debug!("Fetching block {}", current_block);
-
-            let block_data = self
-                .blockchain_client
-                .fetch_single_block_data(current_block)
-                .await?;
-
-            self.process_and_store_blocks(vec![block_data]).await?;
-
-            self.db
-                .update_ingestion_state(current_block as i64, "live")
-                .await?;
-
-            current_block += 1;
-        }
-
-        Ok(())
     }
 
     async fn run_live_mode(&self, start_block: u64) -> Result<()> {
