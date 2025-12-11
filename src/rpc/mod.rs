@@ -1,9 +1,7 @@
 use anyhow::{anyhow, Result};
 use ethers::prelude::*;
-use futures::stream::StreamExt;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
+use tracing::error;
 
 use crate::models::BlockData;
 
@@ -12,16 +10,14 @@ use crate::models::BlockData;
 #[derive(Debug, Clone)]
 pub struct BlockchainClient {
     http_client: Arc<Provider<Http>>,
-    ws_url: String,
 }
 
 impl BlockchainClient {
-    pub fn new(http_url: &str, ws_url: &str) -> Result<Self> {
+    pub fn new(http_url: &str, _ws_url: &str) -> Result<Self> {
         let http_provider = Provider::<Http>::try_from(http_url)?;
         
         Ok(Self {
             http_client: Arc::new(http_provider),
-            ws_url: ws_url.to_string(),
         })
     }
 
@@ -82,57 +78,4 @@ impl BlockchainClient {
         })
     }
 
-    pub fn start_live_subscription(&self) -> Result<mpsc::Receiver<BlockData>> {
-        let ws_url = self.ws_url.clone();
-        let http_client = Arc::clone(&self.http_client);
-        
-        let (tx, rx) = mpsc::channel::<BlockData>(100);
-
-        tokio::spawn(async move {
-            info!("Starting live block subscription");
-            
-            let ws_provider = match Provider::<Ws>::connect(&ws_url).await {
-                Ok(provider) => provider,
-                Err(e) => {
-                    error!("Failed to connect WebSocket: {}", e);
-                    return;
-                }
-            };
-            
-            let mut stream = match ws_provider.subscribe_blocks().await {
-                Ok(stream) => stream,
-                Err(e) => {
-                    error!("Failed to subscribe to blocks: {}", e);
-                    return;
-                }
-            };
-            
-            info!("Started live block subscription");
-            
-            while let Some(block) = stream.next().await {
-                let block_number = block.number.unwrap().as_u64();
-                
-                debug!("Received new block: {}", block_number);
-                
-                match Self::fetch_single_block(
-                    Arc::clone(&http_client),
-                    block_number
-                ).await {
-                    Ok(block_data) => {
-                        if let Err(e) = tx.send(block_data).await {
-                            error!("Failed to send block data: {}", e);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to fetch block {}: {}", block_number, e);
-                    }
-                }
-            }
-            
-            warn!("Live block subscription ended");
-        });
-
-        Ok(rx)
-    }
 }
