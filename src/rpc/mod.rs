@@ -7,8 +7,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::models::BlockData;
 
-pub mod client;
-pub mod websocket;
 
 
 #[derive(Debug, Clone)]
@@ -18,7 +16,7 @@ pub struct BlockchainClient {
 }
 
 impl BlockchainClient {
-    pub async fn new(http_url: &str, ws_url: &str) -> Result<Self> {
+    pub fn new(http_url: &str, ws_url: &str) -> Result<Self> {
         let http_provider = Provider::<Http>::try_from(http_url)?;
         
         Ok(Self {
@@ -69,7 +67,7 @@ impl BlockchainClient {
         let block = client
             .get_block_with_txs(BlockNumber::Number(block_number.into()))
             .await?
-            .ok_or_else(|| anyhow!("Block {} not found", block_number))?;
+            .ok_or_else(|| anyhow!("Block {block_number} not found"))?;
 
         let transactions: Vec<String> = block
             .transactions
@@ -84,7 +82,7 @@ impl BlockchainClient {
         })
     }
 
-    pub async fn start_live_subscription(&self) -> Result<mpsc::Receiver<BlockData>> {
+    pub fn start_live_subscription(&self) -> Result<mpsc::Receiver<BlockData>> {
         let ws_url = self.ws_url.clone();
         let http_client = Arc::clone(&self.http_client);
         

@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     info!("Database connection established and migrations applied");
 
     let blockchain_client = Arc::new(
-        BlockchainClient::new(&config.rpc_http_url, &config.rpc_ws_url).await?,
+        BlockchainClient::new(&config.rpc_http_url, &config.rpc_ws_url)?,
     );
     info!("Blockchain client initialized");
 
