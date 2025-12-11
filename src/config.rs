@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::env;
 
 #[derive(Debug, Clone)]
