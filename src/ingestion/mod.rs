@@ -207,9 +207,9 @@ impl IngestionService {
 
         for block_data in block_data_batch {
             let block = Block {
-                number: block_data.number as i64,
-                timestamp: block_data.timestamp as i64,
-                transaction_count: block_data.transactions.len() as i32,
+                number: i64::try_from(block_data.number).map_err(|_| anyhow::anyhow!("Block number overflow"))?,
+                timestamp: i64::try_from(block_data.timestamp).map_err(|_| anyhow::anyhow!("Timestamp overflow"))?,
+                transaction_count: i32::try_from(block_data.transactions.len()).map_err(|_| anyhow::anyhow!("Transaction count overflow"))?,
                 created_at: Utc::now(),
             };
 
@@ -218,8 +218,8 @@ impl IngestionService {
             for (position, tx_hash) in block_data.transactions.iter().enumerate() {
                 let transaction = Transaction {
                     hash: tx_hash.clone(),
-                    block_number: block_data.number as i64,
-                    position: position as i32,
+                    block_number: i64::try_from(block_data.number).map_err(|_| anyhow::anyhow!("Block number overflow"))?,
+                    position: i32::try_from(position).map_err(|_| anyhow::anyhow!("Position overflow"))?,
                     created_at: Utc::now(),
                 };
                 transactions.push(transaction);
