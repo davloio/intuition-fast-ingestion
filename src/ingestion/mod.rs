@@ -3,6 +3,8 @@ use chrono::Utc;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
+const SMALL_BATCH_THRESHOLD: usize = 10;
+
 use crate::db::Database;
 use crate::models::{Block, BlockData, Transaction};
 use crate::rpc::BlockchainClient;
@@ -31,7 +33,7 @@ impl IngestionService {
     pub async fn start(&self) -> Result<()> {
         loop {
             match self.run_ingestion_cycle().await {
-                Ok(_) => {
+                Ok(()) => {
                     info!("Ingestion cycle completed successfully");
                 }
                 Err(e) => {
@@ -45,7 +47,7 @@ impl IngestionService {
     async fn run_ingestion_cycle(&self) -> Result<()> {
         let state = self.db.get_ingestion_state().await?;
         let current_chain_height = self.blockchain_client.get_current_block_number().await?;
-        let last_processed = state.last_processed_block as u64;
+        let last_processed = u64::try_from(state.last_processed_block).unwrap_or(0);
 
         info!(
             "Current state: last_processed={}, chain_height={}, mode={}",
@@ -66,10 +68,9 @@ impl IngestionService {
     async fn run_smart_sync(&self, start_block: u64, _initial_target: u64) -> Result<()> {
         let mut current_block = start_block + 1;
         let mut small_batch_count = 0;
-        const SMALL_BATCH_THRESHOLD: usize = 10;
 
         self.db
-            .update_ingestion_state(start_block as i64, "reindex")
+            .update_ingestion_state(i64::try_from(start_block).unwrap_or(0), "reindex")
             .await?;
 
         loop {
@@ -81,7 +82,7 @@ impl IngestionService {
                 return self.run_live_mode(current_block - 1).await;
             }
 
-            let batch_size = std::cmp::min(remaining as usize, self.batch_size);
+            let batch_size = std::cmp::min(usize::try_from(remaining).unwrap_or(0), self.batch_size);
 
             if batch_size >= self.batch_size {
                 small_batch_count = 0;
@@ -101,7 +102,7 @@ impl IngestionService {
                 current_block += batch_size as u64;
 
                 self.db
-                    .update_ingestion_state(current_block as i64 - 1, "reindex")
+                    .update_ingestion_state(i64::try_from(current_block).unwrap_or(0) - 1, "reindex")
                     .await?;
             } else {
                 info!(
@@ -118,7 +119,7 @@ impl IngestionService {
                 current_block += batch_size as u64;
 
                 self.db
-                    .update_ingestion_state(current_block as i64 - 1, "reindex")
+                    .update_ingestion_state(i64::try_from(current_block).unwrap_or(0) - 1, "reindex")
                     .await?;
 
                 if batch_size < SMALL_BATCH_THRESHOLD {
@@ -148,7 +149,7 @@ impl IngestionService {
         info!("Starting live mode from block {} with polling fallback", start_block);
 
         self.db
-            .update_ingestion_state(start_block as i64, "live")
+            .update_ingestion_state(i64::try_from(start_block).unwrap_or(0), "live")
             .await?;
 
         info!("WebSocket subscription failed, using polling mode instead");
@@ -177,9 +178,9 @@ impl IngestionService {
                     match self.blockchain_client.fetch_single_block_data(block_num).await {
                         Ok(block_data) => {
                             match self.process_and_store_blocks(vec![block_data]).await {
-                                Ok(_) => {
+                                Ok(()) => {
                                     self.db
-                                        .update_ingestion_state(block_num as i64, "live")
+                                        .update_ingestion_state(i64::try_from(block_num).unwrap_or(0), "live")
                                         .await?;
                                     debug!("Processed live block {}", block_num);
                                     last_block = block_num;
