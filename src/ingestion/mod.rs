@@ -65,7 +65,7 @@ impl IngestionService {
         self.run_smart_sync(last_processed, current_chain_height).await
     }
 
-    async fn run_smart_sync(&self, start_block: u64, initial_target: u64) -> Result<()> {
+    async fn run_smart_sync(&self, start_block: u64, _initial_target: u64) -> Result<()> {
         let mut current_block = start_block + 1;
         let mut small_batch_count = 0;
         const SMALL_BATCH_THRESHOLD: usize = 10;
