@@ -40,7 +40,6 @@ pub enum IngestionMode {
 impl From<String> for IngestionMode {
     fn from(s: String) -> Self {
         match s.as_str() {
-            "reindex" => IngestionMode::Reindex,
             "live" => IngestionMode::Live,
             _ => IngestionMode::Reindex,
         }
