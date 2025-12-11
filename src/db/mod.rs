@@ -23,10 +23,6 @@ impl Database {
         Ok(Self { pool })
     }
 
-    pub fn pool(&self) -> &PgPool {
-        &self.pool
-    }
-
     pub async fn get_ingestion_state(&self) -> Result<IngestionState> {
         let state = sqlx::query_as::<_, IngestionState>(
             "SELECT id, last_processed_block, mode, updated_at FROM ingestion_state WHERE id = 1",
@@ -91,15 +87,5 @@ impl Database {
         query_builder.build().execute(&self.pool).await?;
 
         Ok(())
-    }
-
-    pub async fn get_latest_block_number(&self) -> Result<Option<i64>> {
-        let result = sqlx::query_scalar::<_, Option<i64>>(
-            "SELECT MAX(number) FROM blocks"
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(result)
     }
 }
