@@ -7,8 +7,6 @@ use crate::db::Database;
 use crate::models::{Block, BlockData, Transaction};
 use crate::rpc::BlockchainClient;
 
-pub mod engine;
-pub mod buffer;
 
 
 pub struct IngestionService {

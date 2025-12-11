@@ -2,7 +2,6 @@ use anyhow::Result;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 
-pub mod repository;
 
 use crate::models::{Block, IngestionState, Transaction};
 
