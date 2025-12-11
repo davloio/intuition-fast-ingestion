@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::db::Database;
 use crate::models::{Block, BlockData, Transaction};
