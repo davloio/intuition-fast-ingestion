@@ -7,7 +7,6 @@ pub struct Config {
     pub rpc_http_url: String,
     pub rpc_ws_url: String,
     pub batch_size: usize,
-    pub max_concurrent_requests: usize,
     pub db_max_connections: u32,
 }
 
@@ -29,11 +28,6 @@ impl Config {
             .parse::<usize>()
             .unwrap_or(1000);
 
-        let max_concurrent_requests = env::var("MAX_CONCURRENT_REQUESTS")
-            .unwrap_or_else(|_| "10".to_string())
-            .parse::<usize>()
-            .unwrap_or(10);
-
         let db_max_connections = env::var("DB_MAX_CONNECTIONS")
             .unwrap_or_else(|_| "20".to_string())
             .parse::<u32>()
@@ -44,7 +38,6 @@ impl Config {
             rpc_http_url,
             rpc_ws_url,
             batch_size,
-            max_concurrent_requests,
             db_max_connections,
         })
     }
