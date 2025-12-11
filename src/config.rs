@@ -11,7 +11,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self> {
+    pub fn from_env() -> Self {
         dotenv::dotenv().ok();
 
         let database_url = env::var("DATABASE_URL")
@@ -33,12 +33,12 @@ impl Config {
             .parse::<u32>()
             .unwrap_or(20);
 
-        Ok(Self {
+        Self {
             database_url,
             rpc_http_url,
             rpc_ws_url,
             batch_size,
             db_max_connections,
-        })
+        }
     }
 }

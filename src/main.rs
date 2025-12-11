@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     info!("Starting Intuition Fast Ingestion Service");
 
-    let config = Config::from_env()?;
+    let config = Config::from_env();
     info!("Configuration loaded");
 
     let database = Arc::new(
